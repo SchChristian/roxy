@@ -185,10 +185,14 @@ class ServerConfig < MLClient
 
   # This method exists to return a path relative to roxy
   # when running as regular old Roxy or as a jar
-  def ServerConfig.expand_path(path)
+  def ServerConfig.expand_path(path, is_in_jar = false)
 #    logger.info("path: #{path}")
 #    logger.info("context: #{@@context}")
-    result = File.expand_path(path, @@context)
+    if @@is_jar and is_in_jar
+      result = "/roxy#{path}"
+    else
+      result = File.expand_path(@@path + path, @@context)
+    end
 #    logger.info("result: #{result}")
     return result
   end
@@ -205,7 +209,7 @@ class ServerConfig < MLClient
       gem 'warbler'
       require 'warbler'
 
-      jar_file = ServerConfig.expand_path("#{@@path}/../roxy.jar")
+      jar_file = ServerConfig.expand_path("/../roxy.jar")
       logger.debug(jar_file)
       Dir.mktmpdir do |tmp_dir|
         logger.debug(tmp_dir)
@@ -214,10 +218,11 @@ class ServerConfig < MLClient
         Dir.mkdir temp_roxy_dir
 
         FileUtils.mkdir_p temp_roxy_dir + "/bin"
-        FileUtils.cp(ServerConfig.expand_path("#{@@path}/lib/ml.rb"), temp_roxy_dir + "/bin/roxy.rb")
+        #TODO: Handle case where JAR is used to create another JAR. FileUtils.cp probably won't be able to handle that case
+        FileUtils.cp(ServerConfig.expand_path("/lib/ml.rb", true), temp_roxy_dir + "/bin/roxy.rb")
 
-        FileUtils.cp_r(ServerConfig.expand_path("#{@@path}/lib"), temp_roxy_dir)
-        FileUtils.cp_r(ServerConfig.expand_path("#{@@path}/sample"), temp_roxy_dir)
+        FileUtils.cp_r(ServerConfig.expand_path("/lib", true), temp_roxy_dir)
+        FileUtils.cp_r(ServerConfig.expand_path("/sample", true), temp_roxy_dir)
 
         Dir.chdir(temp_roxy_dir) do
           Warbler::Application.new.run
@@ -239,24 +244,24 @@ class ServerConfig < MLClient
       sample_rest_properties = "roxy/sample/properties.sample.xml"
       sample_app_config = "roxy/deploy/sample/custom-config.xqy"
     else
-      sample_config = ServerConfig.expand_path("#{@@path}/sample/ml-config.sample.xml")
-      sample_properties = ServerConfig.expand_path("#{@@path}/sample/build.sample.properties")
-      sample_options = ServerConfig.expand_path("#{@@path}/sample/all.sample.xml")
-      sample_rest_properties = ServerConfig.expand_path("#{@@path}/sample/properties.sample.xml")
-      sample_app_config = ServerConfig.expand_path("#{@@path}/sample/custom-config.xqy")
+      sample_config = ServerConfig.expand_path("/sample/ml-config.sample.xml", true)
+      sample_properties = ServerConfig.expand_path("/sample/build.sample.properties", true)
+      sample_options = ServerConfig.expand_path("/sample/all.sample.xml", true)
+      sample_rest_properties = ServerConfig.expand_path("/sample/properties.sample.xml", true)
+      sample_app_config = ServerConfig.expand_path("/sample/custom-config.xqy", true)
     end
 
     # output files
-    build_properties = ServerConfig.expand_path("#{@@path}/build.properties")
-    options_file = ServerConfig.expand_path("#{@@path}/../rest-api/config/options/all.xml")
-    rest_properties = ServerConfig.expand_path("#{@@path}/../rest-api/config/properties.xml")
-    app_config = ServerConfig.expand_path("#{@@path}/../src/config/config.xqy")
+    build_properties = ServerConfig.expand_path("/build.properties")
+    options_file = ServerConfig.expand_path("/../rest-api/config/options/all.xml")
+    rest_properties = ServerConfig.expand_path("/../rest-api/config/properties.xml")
+    app_config = ServerConfig.expand_path("/../src/config/config.xqy")
 
     # dirs to create
-    rest_ext_dir = ServerConfig.expand_path("#{@@path}/../rest-api/ext")
-    rest_transforms_dir = ServerConfig.expand_path("#{@@path}/../rest-api/transforms")
-    options_dir = ServerConfig.expand_path("#{@@path}/../rest-api/config/options")
-    config_dir = ServerConfig.expand_path("#{@@path}/../src/config")
+    rest_ext_dir = ServerConfig.expand_path("/../rest-api/ext")
+    rest_transforms_dir = ServerConfig.expand_path("/../rest-api/transforms")
+    options_dir = ServerConfig.expand_path("/../rest-api/config/options")
+    config_dir = ServerConfig.expand_path("/../src/config")
 
     # get supplied options
     force = find_arg(['--force']).present?
@@ -354,11 +359,7 @@ class ServerConfig < MLClient
   end
 
   def self.initcpf
-    if @@is_jar
-      sample_config = "roxy/sample/pipeline-config.sample.xml"
-    else
-      sample_config = ServerConfig.expand_path("#{@@path}/sample/pipeline-config.sample.xml")
-    end
+    sample_config = ServerConfig.expand_path("/sample/pipeline-config.sample.xml", true)
     target_config = ServerConfig.expand_path(ServerConfig.properties["ml.pipeline-config-file"])
 
     force = find_arg(['--force']).present?
@@ -634,7 +635,7 @@ but --no-prompt parameter prevents prompting for password.'
 
       old_timestamp = go(%Q{http://#{@properties["ml.server"]}:8001/admin/v1/timestamp}, "get").body
 
-      setup = File.read ServerConfig.expand_path("#{@@path}/lib/xquery/setup.xqy")
+      setup = read_file ServerConfig.expand_path("/lib/xquery/setup.xqy", true)
       r = execute_query %Q{#{setup} setup:do-restart("#{group}")}
       logger.debug "code: #{r.code.to_i}"
 
@@ -805,7 +806,7 @@ but --no-prompt parameter prevents prompting for password.'
   end
 
   def config
-    setup = File.read ServerConfig.expand_path("#{@@path}/lib/xquery/setup.xqy")
+    setup = read_file ServerConfig.expand_path("/lib/xquery/setup.xqy", true)
     query = %Q{
       #{setup}
       try {
@@ -917,7 +918,7 @@ but --no-prompt parameter prevents prompting for password.'
       apply_changes = "all"
     end
 
-    setup = File.read(ServerConfig.expand_path("#{@@path}/lib/xquery/setup.xqy"))
+    setup = read_file ServerConfig.expand_path("/lib/xquery/setup.xqy", true)
     r = execute_query %Q{#{setup} setup:do-setup(#{config}, "#{apply_changes},#{dointernals}", #{properties_map})}
     logger.debug "code: #{r.code.to_i}"
 
@@ -950,7 +951,7 @@ but --no-prompt parameter prevents prompting for password.'
       internals = 'internals'
     end
 
-    setup = File.read(ServerConfig.expand_path("#{@@path}/lib/xquery/setup.xqy"))
+    setup = read_file ServerConfig.expand_path("/lib/xquery/setup.xqy", true)
     r = execute_query %Q{#{setup} setup:do-clean-replicas-state("#{internals}")}
 
     if r.body.match("error log")
@@ -977,7 +978,7 @@ but --no-prompt parameter prevents prompting for password.'
       config = get_config
     end
 
-    setup = File.read(ServerConfig.expand_path("#{@@path}/lib/xquery/setup.xqy"))
+    setup = read_file ServerConfig.expand_path("/lib/xquery/setup.xqy", true)
     r = execute_query %Q{#{setup} setup:do-clean-replicas(#{config}, "#{internals}", #{properties_map})}
     logger.debug "code: #{r.code.to_i}"
 
@@ -1040,7 +1041,7 @@ In order to proceed please type: #{expected_response}
 
     appbuilder = find_arg(['--app-builder'])
     internals = find_arg(['--internal-replicas'])
-    setup = File.read(ServerConfig.expand_path("#{@@path}/lib/xquery/setup.xqy"))
+    setup = read_file ServerConfig.expand_path("/lib/xquery/setup.xqy", true)
 
     if (appbuilder != nil)
       logger.info "Wiping MarkLogic App-Builder deployment #{appbuilder} from #{@hostname}..."
@@ -1175,7 +1176,7 @@ In order to proceed please type: #{expected_response}
 
   def validate_install
     logger.info "Validating your project installation into MarkLogic on #{@hostname}..."
-    setup = File.read(ServerConfig.expand_path("#{@@path}/lib/xquery/setup.xqy"))
+    setup = read_file ServerConfig.expand_path("/lib/xquery/setup.xqy", true)
     begin
       r = execute_query %Q{#{setup} setup:validate-install(#{get_config}, #{properties_map})}
       logger.debug "code: #{r.code.to_i}"
@@ -1424,7 +1425,7 @@ In order to proceed please type: #{expected_response}
   def recordloader
     filename = ARGV.shift
     raise HelpException.new("recordloader", "configfile is required!") unless filename
-    properties_file = ServerConfig.expand_path("#{@@path}/#{filename}")
+    properties_file = ServerConfig.expand_path("/#{filename}")
     properties = ServerConfig.load_properties(properties_file, "")
     properties = ServerConfig.substitute_properties(properties, @properties, "")
 
@@ -1462,7 +1463,7 @@ In order to proceed please type: #{expected_response}
   def xqsync
     filename = ARGV.shift
     raise HelpException.new("xqsync", "configfile is required!") unless filename
-    properties_file = ServerConfig.expand_path("#{@@path}/#{filename}")
+    properties_file = ServerConfig.expand_path("/#{filename}")
     properties = ServerConfig.load_properties(properties_file, "")
     properties = ServerConfig.substitute_properties(properties, @properties, "")
 
@@ -1710,7 +1711,7 @@ In order to proceed please type: #{expected_response}
       # Create or update environment properties file
       filename = "#{@environment}.properties"
       properties = {}
-      properties_file = ServerConfig.expand_path("#{@@path}/#{filename}")
+      properties_file = ServerConfig.expand_path("/#{filename}")
       begin
         if (File.exists?(properties_file))
           properties = ServerConfig.load_properties(properties_file, "")
@@ -1821,7 +1822,7 @@ In order to proceed please type: #{expected_response}
   def settings
     arg = ARGV.shift
     if arg
-      setup = File.read ServerConfig.expand_path("#{@@path}/lib/xquery/setup.xqy")
+      setup = read_file ServerConfig.expand_path("/lib/xquery/setup.xqy", true)
       r = execute_query %Q{#{setup} setup:list-settings("#{arg}")}
       r.body = parse_body(r.body)
       logger.info r.body
@@ -1863,7 +1864,7 @@ Provides listings of various kinds of settings supported within ml-config.xml.
     else
       triggers_config = File.read target_config
       replace_properties(triggers_config, target_config)
-      triggers_code = File.read ServerConfig.expand_path("#{@@path}/lib/xquery/triggers.xqy")
+      triggers_code = read_file ServerConfig.expand_path("/lib/xquery/triggers.xqy", true)
       query = %Q{#{triggers_code} triggers:load-from-config(#{triggers_config})}
       logger.debug(query)
       r = execute_query(query, :db_name => @properties["ml.triggers-db"])
@@ -1874,7 +1875,7 @@ Provides listings of various kinds of settings supported within ml-config.xml.
 
   def clean_triggers
     if @properties['ml.triggers-db']
-      triggers_code = File.read ServerConfig.expand_path("#{@@path}/lib/xquery/triggers.xqy")
+      triggers_code = read_file ServerConfig.expand_path("/lib/xquery/triggers.xqy", true)
       r = execute_query %Q{#{triggers_code} triggers:clean-triggers()}, :db_name => @properties["ml.triggers-db"]
       return true
     else
@@ -2043,7 +2044,7 @@ private
 
     logger.info "Capturing configuration of MarkLogic on #{@hostname}..."
     logger.debug %Q{calling setup:get-configuration((#{databases}), (#{forests}), (#{servers}), (#{users}), (#{roles}), (#{mimes}))..}
-    setup = File.read(ServerConfig.expand_path("#{@@path}/lib/xquery/setup.xqy"))
+    setup = read_file ServerConfig.expand_path("/lib/xquery/setup.xqy", true)
     r = execute_query %Q{#{setup} setup:get-configuration((#{databases}), (#{forests}), (#{servers}), (#{users}), (#{roles}), (#{mimes}))}
     r.body = parse_body(r.body)
 
@@ -2426,7 +2427,7 @@ private
     else
       cpf_config = File.read cpf_config_file
       replace_properties(cpf_config, ServerConfig.strip_path(cpf_config_file))
-      cpf_code = File.read ServerConfig.expand_path("#{@@path}/lib/xquery/cpf.xqy")
+      cpf_code = read_file ServerConfig.expand_path("/lib/xquery/cpf.xqy", true)
       query = %Q{#{cpf_code} cpf:load-from-config(#{cpf_config})}
       logger.debug(query)
       r = execute_query(query, :db_name => @properties["ml.content-db"])
@@ -2434,7 +2435,7 @@ private
   end
 
   def clean_cpf
-    cpf_code = File.read ServerConfig.expand_path("#{@@path}/lib/xquery/cpf.xqy")
+    cpf_code = read_file ServerConfig.expand_path("/lib/xquery/cpf.xqy", true)
     r = execute_query %Q{#{cpf_code} cpf:clean-cpf()}, :db_name => @properties["ml.content-db"]
   end
 
@@ -2742,7 +2743,7 @@ private
       needs_rescan = false
       sub_me.each do |k,v|
         if v.match(/\$\{basedir\}/)
-          sub_me[k] = ServerConfig.expand_path(v.gsub("${basedir}", Dir.pwd))
+          sub_me[k] = v.gsub("${basedir}", Dir.pwd)
           matches = v.scan(/\$\{([^}]+)\}/)
           needs_rescan = true if matches.length > 1
         else
@@ -3186,7 +3187,7 @@ private
     end
   end
 
-  def ServerConfig.properties(prop_file_location = @@path)
+  def ServerConfig.properties(prop_file_location = "")
     default_properties_file = ServerConfig.expand_path("#{prop_file_location}/default.properties")
     properties_file = ServerConfig.expand_path("#{prop_file_location}/build.properties")
 
@@ -3197,7 +3198,7 @@ private
 
     #Look for optional shared_config, if it is set grab the properties from path relative to the root of the roxy project
     if properties['ml.shared_config']
-      shared_properties_file = ServerConfig.expand_path("#{@@path}/../#{properties['ml.shared_config']}")
+      shared_properties_file = ServerConfig.expand_path("/../#{properties['ml.shared_config']}")
       properties.merge!(ServerConfig.load_properties(shared_properties_file))
     end
 

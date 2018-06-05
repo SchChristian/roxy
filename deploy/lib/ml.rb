@@ -34,7 +34,7 @@ EXIT_RESCUE_EXIT_EXCEPTION = 11
 EXIT_RESCUE_EXCEPTION = 12
 
 if is_jar?
-  require ServerConfig.expand_path("./deploy/app_specific")
+  require ServerConfig.expand_path("/app_specific")
 else
   require 'app_specific'
 end
