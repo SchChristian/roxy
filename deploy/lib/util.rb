@@ -103,14 +103,7 @@ end
 def read_file(filename)
   if is_jar?
     require 'java'
-    stream = self.to_java.get_class.get_class_loader.get_resource_as_stream(filename)
-    br = java.io.BufferedReader.new(java.io.InputStreamReader.new(stream))
-    contents = ""
-    while (line = br.read_line())
-      contents = contents + line + "\n"
-    end
-    br.close()
-    return contents
+    java.lang.Object.java_class.resource_as_string(filename)
   else
     File.read(filename)
   end
