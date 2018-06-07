@@ -1350,7 +1350,7 @@ In order to proceed please type: #{expected_response}
   # Invokes unit tests for the project
   #
   def test
-    if @environment == "prod"
+    if @properties['ml.do-not-deploy-tests'].split(",").include?(@environment)
       logger.error "There is no Test database on the Production server"
     elsif ! @properties["ml.test-port"] || ! @properties["ml.test-content-db"]
       logger.error "Testing is not properly configured"
@@ -3068,7 +3068,7 @@ private
       # Build the test appserver and db if it is provided
       if @properties['ml.test-content-db'].present? &&
          @properties['ml.test-port'].present? &&
-         @environment != "prod"
+        !@properties['ml.do-not-deploy-tests'].split(",").include?(@environment)
 
         config.gsub!("@ml.test-content-db-xml", test_content_db_xml)
         config.gsub!("@ml.test-content-db-assignment", test_content_db_assignment)
