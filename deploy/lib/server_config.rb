@@ -2170,6 +2170,9 @@ private
       if app_configs.present?
         logger.debug "Deploying application configurations"
 
+        xquery_src_dir = @properties["ml.xquery.dir"]
+        xquery_src_dir = xquery_src_dir + "/" unless xquery_src_dir.end_with? "/"
+
         app_configs.split(',').each do |item|
           buffer = File.read item
           replace_properties(buffer, File.basename(item))
@@ -2180,8 +2183,11 @@ private
             item_name = '/config.xqy'
             ignore_us << '/app/config/config.xqy'
             prefix = 'app/config/'
-          elsif item.start_with?("src/")
-            item_name = '/' + item[4, item.length]
+          elsif item.start_with?(xquery_src_dir)
+            item_name = item[xquery_src_dir.length, item.length]
+
+            item_name = "/" + item_name unless item_name.start_with? "/"
+
             ignore_us << item_name
           end
 
