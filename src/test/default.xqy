@@ -169,6 +169,7 @@ declare function t:run-suite($suite as xs:string, $tests as xs:string*, $run-sui
       attribute passed { fn:count($results/t:test/t:result[@type = 'success']) },
       attribute failed { fn:count($results/t:test/t:result[@type = 'fail']) },
       attribute time { functx:total-seconds-from-duration($end-time - $start-time) },
+      attribute timestamp {xs:string(fn:current-dateTime() + $start-time)},
       $results/*/self::t:test
     }
 };
@@ -263,7 +264,7 @@ declare function local:format-junit($suite as element())
     attribute name { fn:data($suite/@name) },
     attribute tests { fn:data($suite/@total) },
     attribute time { fn:data($suite/@time) },
-    attribute timestamp { "" },
+    attribute timestamp { fn:data($suite/@timestamp) },
     for $test in $suite/t:test
     return
       element testcase
@@ -292,14 +293,32 @@ declare function local:run() {
   let $run-suite-teardown as xs:boolean := xdmp:get-request-field("runsuiteteardown", "") eq "true"
   let $run-teardown as xs:boolean := xdmp:get-request-field("runteardown", "") eq "true"
   let $format as xs:string := xdmp:get-request-field("format", "xml")
+  let $suite :=
+    if(fn:empty($suite)) then
+      t:list()/t:suite/@path
+    else
+      $suite
   return
     if ($suite) then
-      let $result := t:run-suite($suite, $tests, $run-suite-teardown, $run-teardown)
-      return
-        if ($format eq "junit") then
-          local:format-junit($result)
-        else
-          $result
+      let $results :=
+        for $s in $suite
+        let $result := t:run-suite($s, $tests, $run-suite-teardown, $run-teardown)
+        return
+          if ($format eq "junit") then
+            local:format-junit($result)
+          else
+            $result
+        return
+          if($format eq "junit") then
+            element testsuites {
+              attribute name {"roxy-junit-run"},
+              attribute tests {fn:sum($results/@tests ! xs:integer(.))},
+              attribute failures {fn:sum($results/@failures ! xs:integer(.))},
+              attribute time {fn:sum($results/@time ! xs:double(.))},
+              $results
+            }
+          else
+            element t:suites {$results}
     else ()
 };
 

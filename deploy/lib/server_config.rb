@@ -1365,20 +1365,19 @@ In order to proceed please type: #{expected_response}
       else
         testTearDown = "&runteardown=true"
       end
-      r = go(%Q{http://#{@hostname}:#{@properties["ml.test-port"]}/test/default.xqy?func=list}, "get")
-      suites = []
-      r.body.split(">").each do |line|
-        suites << line.gsub(/.*suite path="([^"]+)".*/, '\1').strip if line.match("suite path")
-      end
+      testOutputFile = find_arg(['--test-output-file'])
+
 
       success = true
-      suites.each do |suite|
-        r = go(%Q{http://#{@hostname}:#{@properties["ml.test-port"]}/test/default.xqy?func=run&suite=#{url_encode(suite)}&format=junit#{suiteTearDown}#{testTearDown}}, "get")
-        logger.info r.body
-        # Check for an XML failure element, part of the JUnit response.
-        if (r.body.match("<failure"))
-          success = false
-        end
+      r = go(%Q{http://#{@hostname}:#{@properties["ml.test-port"]}/test/default.xqy?func=run&format=junit#{suiteTearDown}#{testTearDown}}, "get")
+      logger.info r.body
+      # Check for an XML failure element, part of the JUnit response.
+      if (r.body.match("<failure"))
+        success = false
+      end
+
+      if testOutputFile.present?
+        File.write(testOutputFile, r.body, :mode => "w")
       end
     end
     if !success

@@ -189,6 +189,13 @@ declare function helper:fail($message as item()*) {
   }
 };
 
+declare function helper:merge-results($results as element(t:result)*) {
+  if(fn:exists($results/@type eq "fail")) then
+    $results[./@type eq "fail"][1]
+  else
+    $results[1]
+};
+
 declare function helper:assert-all-exist($count as xs:unsignedInt, $item as item()*) {
   if ($count eq fn:count($item)) then
     helper:success()
