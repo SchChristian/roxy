@@ -2155,6 +2155,17 @@ private
       ignore_us << "^#{folders_to_ignore}$" unless folders_to_ignore.blank?
 
       src_permissions = permissions(@properties['ml.app-role'], Roxy::ContentCapability::ERU)
+      if @properties.has_key?('ml.extra-roles') and @properties['ml.extra-roles'] != ''
+        @properties['ml.extra-roles'].split(',').each do |role|
+          prop = role.split(':')
+          if prop.length > 1
+            src_permissions.push permissions(prop[0], prop[1])
+          else
+            src_permissions.push permissions(prop[0], Roxy::ContentCapability::ERU)
+          end
+        end
+        src_permissions.flatten!
+      end
 
       if ['rest', 'hybrid'].include? @properties["ml.app-type"]
         # This app uses the REST API, so grant permissions to the rest roles. This allows REST extensions to call
@@ -2664,15 +2675,6 @@ private
   end
 
   def execute_query_8(query, properties = {})
-    # check input like in older versions
-    if properties[:db_name] != nil
-      db_id = get_db_id(properties[:db_name])
-      raise ExitException.new("No Database with name #{properties[:db_name]} found") if db_id.nil?
-    elsif properties[:app_name] != nil
-      sid = get_sid(properties[:app_name])
-      raise ExitException.new("No Server with name #{properties[:app_name]} found") if sid.nil?
-    end
-
     headers = {
       "Content-Type" => "application/x-www-form-urlencoded"
     }
